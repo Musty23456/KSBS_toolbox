@@ -1,6 +1,6 @@
-# KBS Toolbox — Web Admin Dashboard
+# KSBS TOOLBOX — Web Admin Dashboard
 
-React + TypeScript admin dashboard for KBS Toolbox. Lets administrators and
+React + TypeScript admin dashboard for KSBS TOOLBOX. Lets administrators and
 supervisors build surveys, publish them for field collection, review
 submissions, and manage enumerator/staff accounts. Talks to the
 [backend API](../backend) over REST.

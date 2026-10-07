@@ -44,7 +44,7 @@ navigate("/");
     <div className="login-screen">
       <div className="login-panel">
         <div className="login-brand">
-          KBS Toolbox
+          KSBS TOOLBOX
           <small>Create your enumerator account</small>
         </div>
 

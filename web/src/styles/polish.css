@@ -1,5 +1,5 @@
 /* =====================================================================
-   KBS Toolbox — design & motion layer (v2)
+   KSBS TOOLBOX — design & motion layer (v2)
    Loaded AFTER global.css. This file only ADDS visual polish on top of
    the existing class names — no markup or logic depends on it.
    To undo everything: delete this file and the single
@@ -691,4 +691,220 @@ textarea:focus {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+
+/* =====================================================================
+   KSBS TOOLBOX — Visual Refresh v3
+   Premium field-data dashboard palette: emerald / deep navy / warm gold.
+   Visual-only layer; no application logic or API behavior is changed.
+   ===================================================================== */
+:root {
+  --ksbs-emerald: #12a36a;
+  --ksbs-emerald-deep: #08734b;
+  --ksbs-navy: #071d2b;
+  --ksbs-blue: #0d5c78;
+  --ksbs-gold: #f2b84b;
+  --ksbs-surface: rgba(255,255,255,.86);
+  --ksbs-glass: rgba(255,255,255,.72);
+  --ksbs-shadow: 0 14px 40px rgba(7,29,43,.10);
+}
+
+body {
+  background-color: #f4f8f6;
+  background-image:
+    radial-gradient(900px 520px at 8% -8%, rgba(18,163,106,.15), transparent 62%),
+    radial-gradient(800px 520px at 100% 12%, rgba(13,92,120,.12), transparent 62%),
+    radial-gradient(700px 420px at 65% 110%, rgba(242,184,75,.09), transparent 60%);
+}
+
+.main {
+  position: relative;
+  isolation: isolate;
+}
+.main::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 280px;
+  height: 280px;
+  right: 3%;
+  top: 8%;
+  border-radius: 50%;
+  background: rgba(18,163,106,.055);
+  filter: blur(8px);
+  pointer-events: none;
+  animation: kbs-float-a 14s ease-in-out infinite;
+}
+
+.sidebar {
+  background:
+    radial-gradient(420px 240px at 20% 0%, rgba(18,163,106,.18), transparent 65%),
+    linear-gradient(180deg, #071d2b 0%, #0a2735 52%, #061720 100%);
+}
+.sidebar-brand::before {
+  content: "K";
+  background: linear-gradient(145deg, #19bd7b, #08734b);
+}
+.sidebar-nav a.active {
+  background: linear-gradient(100deg, rgba(18,163,106,.95), rgba(8,115,75,.72));
+  box-shadow: 0 8px 24px rgba(18,163,106,.18), inset 0 1px 0 rgba(255,255,255,.15);
+}
+
+.page-header {
+  background: linear-gradient(135deg, rgba(255,255,255,.74), rgba(255,255,255,.42));
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 16px;
+  padding: 18px 20px 20px;
+  box-shadow: 0 8px 28px rgba(7,29,43,.055);
+  backdrop-filter: blur(10px);
+}
+.page-header::after {
+  background: linear-gradient(90deg, var(--ksbs-emerald), var(--ksbs-gold), transparent);
+}
+
+.panel,
+.question-card {
+  background: var(--ksbs-surface);
+  border-color: rgba(8,115,75,.10);
+  box-shadow: var(--ksbs-shadow);
+  backdrop-filter: blur(10px);
+}
+.panel {
+  border-radius: 16px;
+}
+.question-card {
+  border-left-color: var(--ksbs-emerald);
+  border-radius: 14px;
+  transition: transform .22s var(--ease-out), box-shadow .22s ease, border-color .22s ease;
+}
+.question-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 42px rgba(7,29,43,.13);
+  border-color: rgba(18,163,106,.25);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #15b878 0%, #0a8b5a 55%, #08734b 100%);
+  box-shadow: 0 7px 20px rgba(18,163,106,.24);
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06) saturate(1.06);
+  box-shadow: 0 11px 28px rgba(18,163,106,.30);
+}
+.btn-secondary {
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 4px 14px rgba(7,29,43,.05);
+}
+.btn-danger {
+  background: rgba(179,73,47,.035);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  background: rgba(255,255,255,.88);
+  border-color: #cfded7;
+  border-radius: 10px;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  background: #fff;
+  border-color: var(--ksbs-emerald);
+  box-shadow: 0 0 0 4px rgba(18,163,106,.10);
+}
+
+.registry-table {
+  background: rgba(255,255,255,.58);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(7,29,43,.055);
+}
+.registry-table th {
+  background: linear-gradient(180deg, rgba(8,115,75,.07), rgba(8,115,75,.025));
+  color: #466258;
+}
+.registry-table tr:hover td {
+  background: rgba(18,163,106,.055);
+}
+
+.badge-published,
+.badge-synced {
+  color: #08734b;
+  background: rgba(18,163,106,.12);
+  border-color: rgba(18,163,106,.16);
+}
+.badge-pending {
+  color: #9a6414;
+  background: rgba(242,184,75,.17);
+  border-color: rgba(242,184,75,.22);
+}
+
+.login-screen {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(650px 420px at 15% 15%, rgba(18,163,106,.28), transparent 65%),
+    radial-gradient(600px 400px at 90% 85%, rgba(242,184,75,.17), transparent 65%),
+    linear-gradient(135deg, #061923 0%, #082b38 48%, #071d2b 100%);
+}
+.login-screen::before,
+.login-screen::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.login-screen::before {
+  width: 380px; height: 380px;
+  left: -150px; top: -140px;
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 0 0 70px rgba(18,163,106,.035), 0 0 0 140px rgba(18,163,106,.018);
+}
+.login-screen::after {
+  width: 260px; height: 260px;
+  right: -90px; bottom: -90px;
+  background: rgba(242,184,75,.06);
+  filter: blur(2px);
+}
+.login-panel {
+  position: relative;
+  z-index: 1;
+  max-width: 410px;
+  background: rgba(255,255,255,.94);
+  border: 1px solid rgba(255,255,255,.68);
+  border-radius: 22px;
+  padding: 34px;
+  box-shadow: 0 28px 80px rgba(0,0,0,.28);
+  backdrop-filter: blur(18px);
+  animation: kbs-pop .65s var(--ease-out) backwards;
+}
+.login-brand {
+  color: #082b38;
+  font-size: 30px;
+  letter-spacing: -.035em;
+}
+.login-brand::after {
+  content: "";
+  display: block;
+  width: 54px;
+  height: 4px;
+  margin-top: 9px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--ksbs-emerald), var(--ksbs-gold));
+}
+.login-demo-hint {
+  background: rgba(18,163,106,.045);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+@media (max-width: 640px) {
+  .page-header { padding: 15px 16px 17px; border-radius: 13px; }
+  .login-panel { padding: 26px 20px; border-radius: 18px; }
 }

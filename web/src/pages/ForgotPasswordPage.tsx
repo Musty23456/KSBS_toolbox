@@ -31,7 +31,7 @@ export function ForgotPasswordPage() {
     <div className="login-screen">
       <div className="login-panel">
         <div className="login-brand">
-          KBS Toolbox
+          KSBS TOOLBOX
           <small>Request a password reset</small>
         </div>
 

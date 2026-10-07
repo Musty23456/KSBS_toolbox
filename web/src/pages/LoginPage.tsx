@@ -32,7 +32,7 @@ navigate("/");
     <div className="login-screen">
       <div className="login-panel">
         <div className="login-brand">
-          KBS Toolbox
+          KSBS TOOLBOX
           <small>by Musty — field survey administration</small>
         </div>
 

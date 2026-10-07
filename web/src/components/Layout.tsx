@@ -40,7 +40,7 @@ export function Layout() {
       <aside className="sidebar">
         <div>
           <div className="sidebar-brand">
-            KBS Toolbox
+            KSBS TOOLBOX
             <small>Field survey registry</small>
           </div>
         </div>

@@ -1,10 +1,10 @@
 export function AboutPage() {
   return (
     <div className="page">
-      <h1>About KBS Toolbox</h1>
+      <h1>About KSBS TOOLBOX</h1>
 
       <p>
-        KBS Toolbox is a modern digital toolkit designed to support
+        KSBS TOOLBOX is a modern digital toolkit designed to support
         efficient data collection, management and field operations.
       </p>
 
@@ -25,7 +25,7 @@ export function AboutPage() {
         <h3>Mustapha Salisu</h3>
 
         <p>
-          Creator and developer of KBS Toolbox.
+          Creator and developer of KSBS TOOLBOX.
         </p>
       </section>
 
@@ -60,7 +60,7 @@ export function AboutPage() {
         <h2>Special Thanks</h2>
 
         <p>
-          Special thanks to all KBS Staff for their support,
+          Special thanks to all KSBS Staff for their support,
           guidance and contribution.
         </p>
       </section>
@@ -69,14 +69,14 @@ export function AboutPage() {
         <h2>Development</h2>
 
         <p>
-          KBS Toolbox was created by Mustapha Salisu in collaboration
+          KSBS TOOLBOX was created by Mustapha Salisu in collaboration
           with his colleagues and with the assistance of modern
           Artificial Intelligence.
         </p>
       </section>
 
       <p>
-        © 2026 KBS Toolbox
+        © 2026 KSBS TOOLBOX
       </p>
     </div>
   );
