@@ -51,7 +51,7 @@ fun DashboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("KBS Toolbox") })
+            TopAppBar(title = { Text("KSBS TOOLBOX") })
         }
     ) { padding ->
         Column(modifier = Modifier
@@ -122,7 +122,7 @@ fun DashboardScreen(
         .fillMaxWidth()
         .padding(top = 12.dp)
 ) {
-    Text("About KBS Toolbox")
+    Text("About KSBS TOOLBOX")
             }
             Button(
                 onClick = onOpenSubmissions,

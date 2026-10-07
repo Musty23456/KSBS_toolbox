@@ -50,7 +50,7 @@ fun RegisterScreen(onRegisterSuccess: () -> Unit, onBackToLogin: () -> Unit) {
         ) {
             Text("Create account", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Sign up for KBS Toolbox",
+                "Sign up for KSBS TOOLBOX",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(bottom = 32.dp)
             )

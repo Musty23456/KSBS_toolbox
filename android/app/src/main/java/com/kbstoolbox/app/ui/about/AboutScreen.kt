@@ -32,7 +32,7 @@ fun AboutScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About KBS Toolbox") },
+                title = { Text("About KSBS TOOLBOX") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -50,7 +50,7 @@ fun AboutScreen(onBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "KBS Toolbox is a modern digital toolkit designed to support " +
+                "KSBS TOOLBOX is a modern digital toolkit designed to support " +
                     "efficient data collection, management and field operations.",
                 style = MaterialTheme.typography.bodyLarge
             )
@@ -75,7 +75,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 modifier = Modifier.padding(top = 12.dp)
             )
             Text(
-                "Creator and developer of KBS Toolbox.",
+                "Creator and developer of KSBS TOOLBOX.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Muted
             )
@@ -117,7 +117,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 modifier = Modifier.padding(top = 28.dp)
             )
             Text(
-                "Special thanks to all KBS Staff for their support, guidance and contribution.",
+                "Special thanks to all KSBS Staff for their support, guidance and contribution.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp)
             )
@@ -128,14 +128,14 @@ fun AboutScreen(onBack: () -> Unit) {
                 modifier = Modifier.padding(top = 28.dp)
             )
             Text(
-                "KBS Toolbox was created by Mustapha Salisu in collaboration with his " +
+                "KSBS TOOLBOX was created by Mustapha Salisu in collaboration with his " +
                     "colleagues and with the assistance of modern Artificial Intelligence.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp)
             )
 
             Text(
-                "© 2026 KBS Toolbox",
+                "© 2026 KSBS TOOLBOX",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Muted,
                 modifier = Modifier.padding(top = 28.dp, bottom = 12.dp)

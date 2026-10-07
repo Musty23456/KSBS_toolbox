@@ -15,5 +15,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "KBS Toolbox"
+rootProject.name = "KSBS TOOLBOX"
 include(":app")
