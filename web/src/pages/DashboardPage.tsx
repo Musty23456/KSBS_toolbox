@@ -1,3 +1,5 @@
+const [loadError, setLoadError] = useState<string | null>(null);
+import { extractErrorMessage }
 import { useEffect, useState } from "react";
 import { WelcomeAudio } from "../components/WelcomeAudio";
 import { Link } from "react-router-dom";
@@ -15,19 +17,24 @@ export function DashboardPage() {
   const canSeeSubmissions = user?.role === "ADMINISTRATOR" || user?.role === "SUPERVISOR";
   const isAdmin = user?.role === "ADMINISTRATOR";
 
-  useEffect(() => {
+    useEffect(() => {
     (async () => {
-      const surveyList = await surveysApi.list();
-      setSurveys(surveyList);
-      if (canSeeSubmissions) {
-        try {
-          const submissions = await submissionsApi.list({});
-          setRecentSubmissions(submissions.slice(0, 6));
-        } catch {
-          // Non-privileged fallback: leave empty
+      try {
+        const surveyList = await surveysApi.list();
+        setSurveys(surveyList);
+        if (canSeeSubmissions) {
+          try {
+            const submissions = await submissionsApi.list({});
+            setRecentSubmissions(submissions.slice(0, 6));
+          } catch {
+            // leave empty
+          }
         }
+      } catch (err) {
+        setLoadError(extractErrorMessage(err));
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     })();
   }, [canSeeSubmissions]);
 
@@ -46,6 +53,9 @@ export function DashboardPage() {
 
       {isLoading ? (
         <p className="loading-text">Loading…</p>
+            ) : loadError ? (
+        <div className="form-error">Could not load data: {loadError}</div>
+      ) : (
       ) : (
         <>
           <div className="stat-row">
