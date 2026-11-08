@@ -136,7 +136,7 @@ class GeminiProvider(AIProvider):
         except Exception as exc:  # noqa: BLE001 - everything is classified below
             error = classify_exception(exc)
             # Log type and mapped code only; never the raw message or request.
-                        logger.warning(
+            logger.warning(
                 "Gemini call failed: type=%s mapped=%s model=%r detail=%s",
                 type(exc).__name__,
                 error.code,
