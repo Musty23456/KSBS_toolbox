@@ -48,7 +48,7 @@ export function TranslationsPage() {
       );
       setSurveys(mine);
       setSurveyId((current) => current || mine[0]?.id || "");
-    });
+    }).catch((e) => setNotice({ kind: "error", text: extractErrorMessage(e) }));
   }, [user]);
 
   const refresh = useCallback(async () => {
@@ -291,7 +291,7 @@ export function TranslationsPage() {
           </div>
 
           {!data ? (
-            <p className="loading-text">Loading…</p>
+            <p className="loading-text">{notice?.kind === "error" ? "Could not load translations." : "Loading…"}</p>
           ) : rows.length === 0 ? (
             <p className="loading-text">{filter === "attention" ? "Nothing needs attention." : "No texts match."}</p>
           ) : (
