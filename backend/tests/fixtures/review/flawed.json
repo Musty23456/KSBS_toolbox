@@ -1,0 +1,167 @@
+{
+ "sections": [
+  {
+   "title": "Section 1",
+   "order_index": 1
+  },
+  {
+   "title": "Empty part",
+   "order_index": 2
+  }
+ ],
+ "groups": [],
+ "questions": [
+  {
+   "code": "name",
+   "label": "name of respondent?",
+   "type": "LONG_TEXT",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 1
+  },
+  {
+   "code": "age",
+   "label": "How old are you",
+   "type": "SHORT_TEXT",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 2
+  },
+  {
+   "code": "age2",
+   "label": "How old are you",
+   "type": "SHORT_TEXT",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 3
+  },
+  {
+   "code": "lead",
+   "label": "Don't you agree that the clinic service is excellent?",
+   "type": "SINGLE_CHOICE",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [
+    {
+     "value": "Y",
+     "label": "Yes",
+     "order_index": 0
+    },
+    {
+     "value": "N",
+     "label": "No",
+     "order_index": 1
+    }
+   ],
+   "order_index": 4
+  },
+  {
+   "code": "often",
+   "label": "Do you often visit the clinic?",
+   "type": "SHORT_TEXT",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 5
+  },
+  {
+   "code": "income",
+   "label": "What is your monthly income?",
+   "type": "SHORT_TEXT",
+   "is_required": true,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 6
+  },
+  {
+   "code": "modes",
+   "label": "Select all the transport modes you use",
+   "type": "SINGLE_CHOICE",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [
+    {
+     "value": "BUS",
+     "label": "Bus",
+     "order_index": 0
+    },
+    {
+     "value": "CAR",
+     "label": "Car",
+     "order_index": 1
+    },
+    {
+     "value": "FOOT",
+     "label": "On foot",
+     "order_index": 2
+    }
+   ],
+   "order_index": 7
+  },
+  {
+   "code": "ageband",
+   "label": "Age group",
+   "type": "SINGLE_CHOICE",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [
+    {
+     "value": "A",
+     "label": "18-25",
+     "order_index": 0
+    },
+    {
+     "value": "B",
+     "label": "25-35",
+     "order_index": 1
+    },
+    {
+     "value": "C",
+     "label": "40-50",
+     "order_index": 2
+    }
+   ],
+   "order_index": 8
+  },
+  {
+   "code": "consent",
+   "label": "Do you consent to take part?",
+   "type": "YES_NO",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 9
+  },
+  {
+   "code": "nochoices",
+   "label": "Which region do you live in?",
+   "type": "DROPDOWN",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 10
+  },
+  {
+   "code": "bad_skip",
+   "label": "Follow-up question about your later answer",
+   "type": "SHORT_TEXT",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "relevance_expression": "future == 'YES'",
+   "order_index": 11
+  },
+  {
+   "code": "future",
+   "label": "Do you plan to move?",
+   "type": "YES_NO",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [],
+   "order_index": 12
+  }
+ ]
+}

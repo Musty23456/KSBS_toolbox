@@ -14,6 +14,28 @@ is buried in a sub-directory.
   multi-instance production deployment should swap it for a shared store
   (e.g. Redis).
 
+- AI (Phase 1): the per-user AI rate limiter and the "last connection result"
+  shown by `/api/ai/status` are in-process, so they are per-instance and reset
+  on restart. Use a shared store (e.g. Redis) for multi-instance deployments.
+- AI (Phase 2): the `Survey` table has one `description` column, so the AI's
+  introduction and respondent instructions are saved inside it as labelled
+  paragraphs, not in dedicated fields. Dedicated fields (and showing them on
+  the Android form) would need a schema change.
+- AI (Phase 2): skip logic is limited to what every KBS evaluator understands
+  (`== != < <= > >=`, `and/or/not`, `'VALUE' in code`; no arithmetic, no negative
+  numbers). The AI never writes calculated fields or cascading selects.
+- AI (Phase 2): one generation is one provider call (plus at most one automatic
+  repair). Very large requests can hit the output-token limit; the user is told
+  to ask for fewer questions or regenerate section by section.
+- AI (Phase 2): regenerating a section replaces the whole section. Skip logic
+  elsewhere that pointed at replaced questions is cleared (and reported).
+- AI (Phase 1): prompt-injection protection is layered mitigation (limits,
+  delimiters, a guard instruction, phrase tripwires), not a guarantee. Treat
+  model output as untrusted and validate it before using it in later phases.
+- AI (Phase 1): `google-genai` is range-pinned (`>=1,<2`); pin the exact
+  version you deploy. The default model id may need updating as Google
+  retires models.
+
 ## Web admin dashboard
 
 - Question reordering uses simple up/down buttons instead of drag-and-drop,
@@ -58,3 +80,10 @@ is buried in a sub-directory.
   on a simulated device, submits it, and confirms it appears in the
   submissions list). This would be a valuable addition once the individual
   pieces are confirmed to build and run correctly on their own.
+
+- Multilingual (Phase 5): the Android app does not yet show translations or a language selector (web fill screen only). It needs translations in the
+  sync payload, a Room migration and UI.
+- Multilingual (Phase 5): validation messages returned by the server after submit stay in English; the web form's own messages are translated.
+- Multilingual (Phase 5): sections and groups have no code, so their translations are keyed by a hash of the title: renaming one makes it untranslated,
+  and two with an identical title share one translation.
+- Multilingual (Phase 5): the Hausa quality rules are a small heuristic set plus an optional AI pass; they are an aid, not a native-speaker review.

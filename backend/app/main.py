@@ -5,9 +5,10 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.ai.errors import AIError, AIRateLimitedError
 from app.config import get_settings
 from app.database import Base, engine
-from app.routers import analytics, audit, auth, devices, exports, locations, map as map_router, media, reviews, submissions, surveys, sync, translations, users
+from app.routers import ai as ai_router, ai_questionnaire as ai_questionnaire_router, ai_questionnaire_edit as ai_questionnaire_edit_router, ai_questionnaire_review as ai_questionnaire_review_router, analytics, audit, auth, devices, exports, locations, map as map_router, media, reviews, submissions, survey_translations, surveys, sync, translations, users
 
 settings = get_settings()
 
@@ -68,6 +69,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(translations.router)
+app.include_router(survey_translations.router)
 app.include_router(surveys.router)
 app.include_router(submissions.router)
 app.include_router(reviews.router)
@@ -79,6 +81,24 @@ app.include_router(map_router.router)
 app.include_router(exports.router)
 app.include_router(analytics.router)
 app.include_router(audit.router)
+app.include_router(ai_router.router)
+app.include_router(ai_questionnaire_router.router)
+app.include_router(ai_questionnaire_edit_router.router)
+app.include_router(ai_questionnaire_review_router.router)
+
+
+@app.exception_handler(AIError)
+async def ai_error_handler(request: Request, exc: AIError):
+    # Same {"detail": "..."} shape as the rest of the API, plus a stable code.
+    # Only the safe message is returned - never provider exception text.
+    headers = {}
+    if isinstance(exc, AIRateLimitedError):
+        headers["Retry-After"] = str(exc.retry_after)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.safe_message, "code": exc.code},
+        headers=headers,
+    )
 
 
 def _apply_manual_column_migrations():
@@ -102,6 +122,7 @@ def _apply_manual_column_migrations():
         "ALTER TABLE submission_answers ADD COLUMN IF NOT EXISTS media_reference VARCHAR(1000)",
         "ALTER TABLE submission_answers ADD COLUMN IF NOT EXISTS group_instance_index INTEGER",
         "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL'",
+        "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     with engine.begin() as conn:
         for statement in statements:
@@ -129,6 +150,13 @@ def on_startup():
         from app.seed import run as run_seed
 
         run_seed()
+
+    if settings.AI_ENABLED and not settings.GEMINI_API_KEY:
+        import logging
+
+        logging.getLogger("app.ai").warning(
+            "AI_ENABLED is true but GEMINI_API_KEY is empty; AI endpoints will report not configured."
+        )
 
 
 @app.get("/", tags=["health"])

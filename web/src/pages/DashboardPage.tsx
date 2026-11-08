@@ -5,6 +5,7 @@ import { surveysApi, submissionsApi } from "../api/services";
 import type { Submission, SurveySummary } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { StatusBadge } from "../components/StatusBadge";
+import { AIStatusCard } from "../components/AIStatusCard";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -12,6 +13,7 @@ export function DashboardPage() {
   const [recentSubmissions, setRecentSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const canSeeSubmissions = user?.role === "ADMINISTRATOR" || user?.role === "SUPERVISOR";
+  const isAdmin = user?.role === "ADMINISTRATOR";
 
   useEffect(() => {
     (async () => {
@@ -66,6 +68,8 @@ export function DashboardPage() {
               </div>
             )}
           </div>
+
+          {canSeeSubmissions && <AIStatusCard canTest={isAdmin} />}
 
           <h2>Surveys</h2>
           {surveys.length === 0 ? (

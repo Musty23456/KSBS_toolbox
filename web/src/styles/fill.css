@@ -98,3 +98,12 @@
   .q-body { margin-left: 0; }
   .q-card { padding: var(--space-4); }
 }
+
+/* Phase 5: language selector, white-space for multi-paragraph descriptions, right-to-left forms */
+.fill-language { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font-size: 13px; margin-bottom: 8px; }
+.fill-language select { padding: 4px 8px; }
+.fill-description { white-space: pre-line; }
+.fill-page[dir="rtl"] { text-align: right; }
+.fill-page[dir="rtl"] .q-head { flex-direction: row-reverse; }
+.fill-page[dir="rtl"] .choice-item { flex-direction: row-reverse; justify-content: flex-end; }
+.fill-page[dir="rtl"] .fill-language { justify-content: flex-start; }

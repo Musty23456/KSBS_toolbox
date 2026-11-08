@@ -18,3 +18,8 @@ pytest==8.3.3
 httpx==0.27.2
 openpyxl==3.1.5
 reportlab==4.2.2
+# Official Google Gen AI SDK (Gemini). Phase 1 AI integration. Imported lazily,
+# so the app still starts and the tests still run if it is not installed.
+# Range-pinned because exact version could not be verified offline; pin to the
+# exact version you deploy once installed (pip freeze | grep google-genai).
+google-genai>=1.0.0,<2.0.0

@@ -20,12 +20,15 @@ class ChoiceOut(ChoiceIn):
 
 
 class SectionIn(BaseModel):
+    # Optional id of the section being re-saved. Used only to re-point questions at the new version's rows.
+    id: str | None = None
     title: str = Field(max_length=255)
     description: str | None = None
     order_index: int = 0
 
 
 class QuestionGroupIn(BaseModel):
+    id: str | None = None
     title: str = Field(max_length=255)
     description: str | None = None
     order_index: int = 0
@@ -99,6 +102,8 @@ class SurveyCreate(BaseModel):
     sections: list[SectionIn] = []
     groups: list[QuestionGroupIn] = []
     assigned_enumerator_ids: list[str] = []
+    # True when the content came from the AI questionnaire generator.
+    ai_generated: bool = False
 
 
 class SurveyUpdate(BaseModel):
@@ -110,6 +115,17 @@ class SurveyUpdate(BaseModel):
     # None = leave assignments unchanged. [] = explicitly open to every
     # enumerator. A non-empty list = restrict to just those enumerator ids.
     assigned_enumerator_ids: list[str] | None = None
+    # Only ever turns the provenance flag ON (an edit never makes AI content "not AI").
+    ai_generated: bool | None = None
+    # Version history note stored on the new version (only used when the questions change).
+    change_summary: str | None = Field(default=None, max_length=1000)
+    change_source: Literal["MANUAL", "AI_EDIT"] | None = None
+
+
+class SurveyPublishRequest(BaseModel):
+    """Optional body for publishing. AI-generated surveys require confirm_ai_review=true."""
+
+    confirm_ai_review: bool = False
 
 
 class SurveySummaryOut(BaseModel):
@@ -125,6 +141,7 @@ class SurveySummaryOut(BaseModel):
     assigned_enumerator_ids: list[str] = []
     scope: str = "GLOBAL"
     created_by_id: str | None = None
+    ai_generated: bool = False
 
 
 class SurveyDetailOut(SurveySummaryOut):
@@ -150,3 +167,26 @@ class SurveySharesUpdate(BaseModel):
 class SurveySharesOut(BaseModel):
     survey_id: str
     user_ids: list[str] = []
+
+
+class SurveyVersionSummaryOut(BaseModel):
+    """One row of a survey's version history."""
+
+    id: str
+    version_number: int
+    is_current: bool
+    created_at: datetime
+    created_by_id: str | None = None
+    created_by_name: str | None = None
+    change_source: str | None = None
+    change_summary: str | None = None
+    question_count: int = 0
+    section_count: int = 0
+
+
+class SurveyVersionDetailOut(SurveyVersionSummaryOut):
+    """The full content of one (immutable) version, so it can be viewed or loaded into the builder."""
+
+    sections: list[SectionOut] = []
+    groups: list[QuestionGroupOut] = []
+    questions: list[QuestionOut] = []

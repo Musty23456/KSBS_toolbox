@@ -12,6 +12,8 @@ interface Props {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDuplicate: () => void;
+  /** Present only when AI is available: asks the AI to rewrite this question. */
+  onRegenerate?: () => void;
   draggable?: boolean;
   onDragStart?: () => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
@@ -20,7 +22,7 @@ interface Props {
 
 const QUESTION_TYPES = Object.keys(QUESTION_TYPE_LABELS) as QuestionType[];
 
-export function QuestionEditor({ question, index, total, otherQuestions, onChange, onRemove, onMoveUp, onMoveDown, onDuplicate, draggable, onDragStart, onDragOver, onDrop }: Props) {
+export function QuestionEditor({ question, index, total, otherQuestions, onChange, onRemove, onMoveUp, onMoveDown, onDuplicate, onRegenerate, draggable, onDragStart, onDragOver, onDrop }: Props) {
   const isChoiceType = CHOICE_TYPES.includes(question.type);
   const isNumeric = question.type === "INTEGER" || question.type === "DECIMAL";
   const isText = question.type === "SHORT_TEXT" || question.type === "LONG_TEXT";
@@ -74,6 +76,11 @@ export function QuestionEditor({ question, index, total, otherQuestions, onChang
           >
             ↓
           </button>
+          {onRegenerate && (
+            <button type="button" className="btn btn-secondary btn-icon" onClick={onRegenerate} title="Ask the AI to rewrite this question">
+              ✨ Regenerate
+            </button>
+          )}
           <button type="button" className="btn btn-secondary btn-icon" onClick={onDuplicate} title="Duplicate question">
             Duplicate
           </button>

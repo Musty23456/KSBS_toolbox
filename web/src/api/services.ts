@@ -1,16 +1,44 @@
 import type {
+  AIStatus,
+  AITestConnectionResult,
+  EditPreview,
+  EditProposal,
+  ReviewReport,
+  EditSnapshot,
+  GeneratedQuestionnairePreview,
+  QuestionnaireAvailability,
+  QuestionnaireBrief,
+  ContextQuestion,
+  Question,
+  RegeneratedQuestion,
+  RegeneratedSection,
   PasswordResetRequestItem,
   PasswordResetRequestStatus,
   Role,
   Submission,
   SubmissionStatus,
   SurveyDetail,
+  SurveyVersionDetail,
+  SurveyVersionSummary,
   SurveySummary,
   ShareTarget,
   UserAccount,
   Device,
 } from "./types";
 import { apiClient, setStoredToken } from "./client"
+import type {
+  HausaReport,
+  I18nCompareRow,
+  I18nLanguage,
+  I18nLanguageData,
+  I18nLocalized,
+  I18nOverview,
+  I18nSaveItem,
+  I18nSummary,
+  I18nTranslateRequest,
+  I18nTranslateResult,
+  I18nUnit,
+} from "./types";
 
 /* =========================================================
    AUTH API
@@ -124,6 +152,7 @@ export const surveysApi = {
     sections?: any[];
     groups?: any[];
     assigned_enumerator_ids?: string[];
+    ai_generated?: boolean;
   }): Promise<SurveyDetail> {
     const { data } = await apiClient.post(
       "/api/surveys",
@@ -142,6 +171,10 @@ export const surveysApi = {
       sections?: any[];
       groups?: any[];
       assigned_enumerator_ids?: string[];
+      ai_generated?: boolean;
+      /** Stored on the new version in the version history. */
+      change_summary?: string;
+      change_source?: "MANUAL" | "AI_EDIT";
     }
   ): Promise<SurveyDetail> {
     const { data } = await apiClient.put(
@@ -152,9 +185,11 @@ export const surveysApi = {
     return data;
   },
 
-  async publish(id: string): Promise<SurveyDetail> {
+  /** AI-generated surveys need confirmReview=true (the server refuses otherwise). */
+  async publish(id: string, confirmReview = false): Promise<SurveyDetail> {
     const { data } = await apiClient.post(
-      `/api/surveys/${id}/publish`
+      `/api/surveys/${id}/publish`,
+      confirmReview ? { confirm_ai_review: true } : undefined
     );
 
     return data;
@@ -165,6 +200,17 @@ export const surveysApi = {
       `/api/surveys/${id}/unpublish`
     );
 
+    return data;
+  },
+
+  /** Version history, newest first. Only people who can edit the survey may call this. */
+  async versions(id: string): Promise<SurveyVersionSummary[]> {
+    const { data } = await apiClient.get(`/api/surveys/${id}/versions`);
+    return data;
+  },
+
+  async getVersion(id: string, versionId: string): Promise<SurveyVersionDetail> {
+    const { data } = await apiClient.get(`/api/surveys/${id}/versions/${versionId}`);
     return data;
   },
 
@@ -504,6 +550,48 @@ export const translationsApi = {
 
 
 /* =========================================================
+   MULTILINGUAL QUESTIONNAIRES (Phase 5)
+========================================================= */
+
+export const i18nApi = {
+  async overview(surveyId: string): Promise<I18nOverview> {
+    return (await apiClient.get(`/api/surveys/${surveyId}/i18n/overview`)).data;
+  },
+  async available(surveyId: string): Promise<(I18nLanguage & { percent_complete: number })[]> {
+    return (await apiClient.get(`/api/surveys/${surveyId}/i18n/available`)).data;
+  },
+  async language(surveyId: string, code: string): Promise<I18nLanguageData> {
+    return (await apiClient.get(`/api/surveys/${surveyId}/i18n/${code}`)).data;
+  },
+  async localized(surveyId: string, code: string): Promise<I18nLocalized> {
+    return (await apiClient.get(`/api/surveys/${surveyId}/i18n/${code}/localized`)).data;
+  },
+  async compare(surveyId: string, codes: string[]): Promise<{ languages: I18nLanguage[]; rows: I18nCompareRow[] }> {
+    return (await apiClient.get(`/api/surveys/${surveyId}/i18n/compare`, { params: { languages: codes.join(",") } })).data;
+  },
+  async save(
+    surveyId: string,
+    code: string,
+    units: I18nSaveItem[]
+  ): Promise<{ saved: number; removed: number; summary: I18nSummary; units: I18nUnit[] }> {
+    return (await apiClient.put(`/api/surveys/${surveyId}/i18n/${code}/units`, { units })).data;
+  },
+  async translate(surveyId: string, code: string, body: I18nTranslateRequest): Promise<I18nTranslateResult> {
+    return (await apiClient.post(`/api/surveys/${surveyId}/i18n/${code}/translate`, body)).data;
+  },
+  async remove(surveyId: string, code: string): Promise<void> {
+    await apiClient.delete(`/api/surveys/${surveyId}/i18n/${code}`);
+  },
+  async hausaReview(surveyId: string, useAi: boolean): Promise<HausaReport> {
+    return (await apiClient.post(`/api/surveys/${surveyId}/i18n/ha/review`, { use_ai: useAi })).data;
+  },
+  async importLegacy(surveyId: string): Promise<{ imported: number; skipped_existing: number; not_matched: number }> {
+    return (await apiClient.post(`/api/surveys/${surveyId}/i18n/import-legacy`)).data;
+  },
+};
+
+
+/* =========================================================
    AUDIT API
 ========================================================= */
 
@@ -551,6 +639,109 @@ export const auditApi = {
       "/api/audit/filters"
     );
 
+    return data;
+  },
+};
+
+
+/* =========================================================
+   AI API
+========================================================= */
+
+export const aiApi = {
+  async status(): Promise<AIStatus> {
+    const { data } = await apiClient.get("/api/ai/status");
+    return data;
+  },
+
+  async testConnection(): Promise<AITestConnectionResult> {
+    const { data } = await apiClient.post("/api/ai/test-connection");
+    return data;
+  },
+};
+
+
+/* ---------------- AI questionnaire generator (Phase 2) ----------------
+   These calls only ever return PREVIEWS. Nothing is saved until the user
+   confirms in the Survey Builder and the normal surveysApi.create/update runs. */
+
+// Generation can take a while (a full questionnaire is a long answer).
+const GENERATION_TIMEOUT_MS = 180_000;
+
+export const aiQuestionnaireApi = {
+  async availability(): Promise<QuestionnaireAvailability> {
+    const { data } = await apiClient.get("/api/ai/questionnaire/availability");
+    return data;
+  },
+
+  async generate(brief: QuestionnaireBrief): Promise<GeneratedQuestionnairePreview> {
+    const { data } = await apiClient.post("/api/ai/questionnaire/generate", brief, { timeout: GENERATION_TIMEOUT_MS });
+    return data;
+  },
+
+  async regenerateQuestion(payload: {
+    brief: QuestionnaireBrief;
+    section_title?: string | null;
+    question: Question;
+    instruction?: string | null;
+    preceding_questions: ContextQuestion[];
+    other_codes: string[];
+  }): Promise<RegeneratedQuestion> {
+    const { data } = await apiClient.post("/api/ai/questionnaire/regenerate-question", payload, { timeout: GENERATION_TIMEOUT_MS });
+    return data;
+  },
+
+  async regenerateSection(payload: {
+    brief: QuestionnaireBrief;
+    section_title: string;
+    section_description?: string | null;
+    current_questions: ContextQuestion[];
+    preceding_questions: ContextQuestion[];
+    other_codes: string[];
+    question_count?: number | null;
+    instruction?: string | null;
+  }): Promise<RegeneratedSection> {
+    const { data } = await apiClient.post("/api/ai/questionnaire/regenerate-section", payload, { timeout: GENERATION_TIMEOUT_MS });
+    return data;
+  },
+};
+
+
+/* ---------------- AI questionnaire editor (Phase 3) ----------------
+   Both calls only return PREVIEWS of structured operations. Nothing is saved: the person applies
+   a preview to the builder's draft and saves through surveysApi.update (a new version). */
+
+export const aiEditApi = {
+  async propose(payload: {
+    instruction: string;
+    snapshot: EditSnapshot;
+    survey_title?: string | null;
+    survey_description?: string | null;
+  }): Promise<EditProposal> {
+    const { data } = await apiClient.post("/api/ai/questionnaire/edit/propose", payload, { timeout: GENERATION_TIMEOUT_MS });
+    return data;
+  },
+
+  /** Re-validate a chosen set of operations (no AI call). */
+  async preview(snapshot: EditSnapshot, operations: Record<string, unknown>[]): Promise<EditPreview> {
+    const { data } = await apiClient.post("/api/ai/questionnaire/edit/preview", { snapshot, operations });
+    return data;
+  },
+};
+
+/* ---------------------------------------------------------------- AI questionnaire reviewer (Phase 4)
+   Read-only: returns a report. Applying a suggestion goes through aiEditApi.preview and the builder's
+   normal apply / undo / save flow. */
+
+export const aiReviewApi = {
+  async review(payload: {
+    snapshot: EditSnapshot;
+    objectives?: string | null;
+    survey_title?: string | null;
+    survey_description?: string | null;
+    use_ai?: boolean;
+  }): Promise<ReviewReport> {
+    const { data } = await apiClient.post("/api/ai/questionnaire/review", payload, { timeout: GENERATION_TIMEOUT_MS });
     return data;
   },
 };

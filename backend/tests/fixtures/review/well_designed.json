@@ -1,0 +1,169 @@
+{
+ "sections": [
+  {
+   "title": "Consent and profile",
+   "order_index": 1
+  },
+  {
+   "title": "Household and health",
+   "order_index": 2
+  }
+ ],
+ "groups": [],
+ "questions": [
+  {
+   "code": "consent",
+   "label": "Do you agree to take part in this survey?",
+   "type": "YES_NO",
+   "is_required": true,
+   "section_id": "local-0",
+   "choices": [],
+   "hint": "Read the consent statement first.",
+   "order_index": 1
+  },
+  {
+   "code": "age",
+   "label": "How old are you?",
+   "type": "INTEGER",
+   "is_required": true,
+   "section_id": "local-0",
+   "choices": [],
+   "min_value": 0,
+   "max_value": 120,
+   "hint": "Age in completed years.",
+   "order_index": 2
+  },
+  {
+   "code": "gender",
+   "label": "What is your gender?",
+   "type": "SINGLE_CHOICE",
+   "is_required": true,
+   "section_id": "local-0",
+   "choices": [
+    {
+     "value": "FEMALE",
+     "label": "Female",
+     "order_index": 0
+    },
+    {
+     "value": "MALE",
+     "label": "Male",
+     "order_index": 1
+    },
+    {
+     "value": "OTHER",
+     "label": "Other",
+     "order_index": 2
+    },
+    {
+     "value": "NA",
+     "label": "Prefer not to say",
+     "order_index": 3
+    }
+   ],
+   "order_index": 3
+  },
+  {
+   "code": "education",
+   "label": "What is the highest level of education you have completed?",
+   "type": "SINGLE_CHOICE",
+   "is_required": false,
+   "section_id": "local-0",
+   "choices": [
+    {
+     "value": "NONE",
+     "label": "No formal education",
+     "order_index": 0
+    },
+    {
+     "value": "PRIMARY",
+     "label": "Primary",
+     "order_index": 1
+    },
+    {
+     "value": "SECONDARY",
+     "label": "Secondary",
+     "order_index": 2
+    },
+    {
+     "value": "TERTIARY",
+     "label": "Tertiary",
+     "order_index": 3
+    },
+    {
+     "value": "DK",
+     "label": "Don't know",
+     "order_index": 4
+    }
+   ],
+   "order_index": 4
+  },
+  {
+   "code": "has_children",
+   "label": "Do you have children under five?",
+   "type": "YES_NO",
+   "is_required": true,
+   "section_id": "local-1",
+   "choices": [],
+   "order_index": 5
+  },
+  {
+   "code": "n_children",
+   "label": "How many children under five live in your household?",
+   "type": "INTEGER",
+   "is_required": false,
+   "section_id": "local-1",
+   "choices": [],
+   "min_value": 0,
+   "max_value": 20,
+   "relevance_expression": "has_children == 'YES'",
+   "order_index": 6
+  },
+  {
+   "code": "clinic_visit",
+   "label": "Did you visit a health clinic in the last 12 months?",
+   "type": "YES_NO",
+   "is_required": false,
+   "section_id": "local-1",
+   "choices": [],
+   "hint": "Include any health centre or hospital.",
+   "order_index": 7
+  },
+  {
+   "code": "clinic_rating",
+   "label": "How satisfied were you with the clinic service?",
+   "type": "SINGLE_CHOICE",
+   "is_required": false,
+   "section_id": "local-1",
+   "choices": [
+    {
+     "value": "VS",
+     "label": "Very satisfied",
+     "order_index": 0
+    },
+    {
+     "value": "S",
+     "label": "Satisfied",
+     "order_index": 1
+    },
+    {
+     "value": "N",
+     "label": "Neutral",
+     "order_index": 2
+    },
+    {
+     "value": "D",
+     "label": "Dissatisfied",
+     "order_index": 3
+    },
+    {
+     "value": "VD",
+     "label": "Very dissatisfied",
+     "order_index": 4
+    }
+   ],
+   "relevance_expression": "clinic_visit == 'YES'",
+   "order_index": 8
+  }
+ ]
+}

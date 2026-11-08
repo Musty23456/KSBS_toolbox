@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { surveysApi } from "../../api/services";
-import type { Choice, Question, QuestionGroup, SurveyDetail, SurveySection } from "../../api/types";
+import { i18nApi, surveysApi } from "../../api/services";
+import type { Choice, I18nLanguage, I18nLocalized, Question, QuestionGroup, SurveyDetail, SurveySection } from "../../api/types";
 import { extractErrorMessage } from "../../api/client";
 import { mediaApi, webSubmissionsApi } from "../../api/media";
 import type { CapturedFile, MediaKind, WebAnswerIn } from "../../api/media";
@@ -11,6 +11,7 @@ import { PhotoCapture } from "../../components/PhotoCapture";
 import { SignatureCanvas } from "../../components/SignatureCanvas";
 import { coerceAnswer, isRelevant } from "./relevance";
 import type { ExpressionValue } from "./relevance";
+import { initialLanguage, languageStorageKey, message, pickText } from "../translations/translationUtils";
 import "../../styles/fill.css";
 
 const MEDIA_TYPES = new Set(["PHOTO", "AUDIO", "SIGNATURE"]);
@@ -41,6 +42,10 @@ export function FillSurveyPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
+  // Language the respondent reads the form in. "" = the original text. Answers never depend on it: they are stored by value.
+  const [offered, setOffered] = useState<(I18nLanguage & { percent_complete: number })[]>([]);
+  const [lang, setLang] = useState("");
+  const [loc, setLoc] = useState<I18nLocalized | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +59,17 @@ export function FillSurveyPage() {
           initial[g.id] = Array.from({ length: count }, (_, i) => i);
         });
         setInstances(initial);
+        try {
+          const languages = await i18nApi.available(data.id);
+          setOffered(languages);
+          const start = initialLanguage(localStorage.getItem(languageStorageKey(data.id)), languages.map((l) => l.code));
+          if (start) {
+            setLoc(await i18nApi.localized(data.id, start));
+            setLang(start);
+          }
+        } catch {
+          setOffered([]); // translations are optional: the form works in its original language without them
+        }
       } catch {
         setSurvey(null);
       } finally {
@@ -61,6 +77,32 @@ export function FillSurveyPage() {
       }
     })();
   }, [surveyId]);
+
+  async function chooseLanguage(code: string) {
+    if (!survey) return;
+    try {
+      setLoc(code ? await i18nApi.localized(survey.id, code) : null);
+      setLang(code);
+      localStorage.setItem(languageStorageKey(survey.id), code);
+      setErrors({});
+      setError(null);
+    } catch {
+      setError("Could not load that language. The form stays in its current language.");
+    }
+  }
+
+  // Text in the chosen language, field by field, falling back to the original.
+  const tr = {
+    survey: (f: "title" | "description", original: string | null) => pickText(loc?.survey?.[f], original),
+    section: (s: { id?: string | null; title: string; description?: string | null }, f: "title" | "description") =>
+      pickText(s.id ? loc?.sections?.[s.id]?.[f] : undefined, s[f] ?? null),
+    group: (g: { id?: string | null; title: string; description?: string | null }, f: "title" | "description") =>
+      pickText(g.id ? loc?.groups?.[g.id]?.[f] : undefined, g[f] ?? null),
+    label: (q: Question) => pickText(q.id ? loc?.questions?.[q.id]?.label : undefined, q.label),
+    hint: (q: Question) => pickText(q.id ? loc?.questions?.[q.id]?.hint : undefined, q.hint ?? null),
+    choice: (c: Choice) => pickText(c.id ? loc?.choices?.[c.id] : undefined, c.label),
+    msg: (key: string, fallback: string, vars: Record<string, string | number> = {}) => message(loc, key, fallback, vars),
+  };
 
   // ---------- layout: sections -> questions / repeating groups ----------
   const blocks = useMemo<Block[]>(() => {
@@ -242,20 +284,20 @@ export function FillSurveyPage() {
     slots.forEach(({ q, instance }) => {
       const k = keyOf(q.id ?? "", instance);
       if (!isAnswered(q, instance)) {
-        if (q.is_required) found[k] = "This question is required.";
+        if (q.is_required) found[k] = tr.msg("msg.required", "This question is required.");
         return;
       }
       const value = text[k] ?? "";
       if (q.type === "INTEGER" || q.type === "DECIMAL") {
         const n = Number(value);
-        if (!Number.isFinite(n)) found[k] = "Enter a valid number.";
-        else if (q.type === "INTEGER" && !Number.isInteger(n)) found[k] = "Enter a whole number.";
-        else if (q.min_value != null && n < q.min_value) found[k] = `Must be at least ${q.min_value}.`;
-        else if (q.max_value != null && n > q.max_value) found[k] = `Must be at most ${q.max_value}.`;
+        if (!Number.isFinite(n)) found[k] = tr.msg("msg.number", "Enter a valid number.");
+        else if (q.type === "INTEGER" && !Number.isInteger(n)) found[k] = tr.msg("msg.integer", "Enter a whole number.");
+        else if (q.min_value != null && n < q.min_value) found[k] = tr.msg("msg.min", "Must be at least {min}.", { min: q.min_value });
+        else if (q.max_value != null && n > q.max_value) found[k] = tr.msg("msg.max", "Must be at most {max}.", { max: q.max_value });
       }
       if (q.type === "SHORT_TEXT" || q.type === "LONG_TEXT") {
-        if (q.min_length != null && value.trim().length < q.min_length) found[k] = `Write at least ${q.min_length} characters.`;
-        else if (q.max_length != null && value.trim().length > q.max_length) found[k] = `Write at most ${q.max_length} characters.`;
+        if (q.min_length != null && value.trim().length < q.min_length) found[k] = tr.msg("msg.min_length", "Write at least {min} characters.", { min: q.min_length });
+        else if (q.max_length != null && value.trim().length > q.max_length) found[k] = tr.msg("msg.max_length", "Write at most {max} characters.", { max: q.max_length });
       }
     });
     return found;
@@ -269,7 +311,7 @@ export function FillSurveyPage() {
     const found = validate();
     if (Object.keys(found).length > 0) {
       setErrors(found);
-      setError(`Please fix ${Object.keys(found).length} highlighted question(s).`);
+      setError(tr.msg("msg.fix_errors", "Please fix {count} highlighted question(s).", { count: Object.keys(found).length }));
       const firstKey = slots.map((s) => keyOf(s.q.id ?? "", s.instance)).find((k) => k in found);
       if (firstKey) document.getElementById(`q-${firstKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -376,20 +418,20 @@ export function FillSurveyPage() {
                 className={value === opt ? "selected" : ""}
                 onClick={() => setValue(q, instance, opt)}
               >
-                {opt === "YES" ? "Yes" : "No"}
+                {opt === "YES" ? tr.msg("ui.yes", "Yes") : tr.msg("ui.no", "No")}
               </button>
             ))}
           </div>
         );
       case "SINGLE_CHOICE": {
         const options = choicesFor(q, instance);
-        if (options.length === 0) return <p className="media-note">Answer the earlier question first.</p>;
+        if (options.length === 0) return <p className="media-note">{tr.msg("ui.answer_earlier", "Answer the earlier question first.")}</p>;
         return (
           <div className="choice-list">
             {options.map((c) => (
               <label key={c.value} className={`choice-item ${value === c.value ? "selected" : ""}`}>
                 <input type="radio" name={`r-${k}`} checked={value === c.value} onChange={() => setValue(q, instance, c.value)} />
-                {c.label}
+                {tr.choice(c)}
               </label>
             ))}
           </div>
@@ -399,10 +441,10 @@ export function FillSurveyPage() {
         const options = choicesFor(q, instance);
         return (
           <select value={value} onChange={(e) => setValue(q, instance, e.target.value)} disabled={options.length === 0}>
-            <option value="">{options.length === 0 ? "Answer the earlier question first" : "Select…"}</option>
+            <option value="">{options.length === 0 ? tr.msg("ui.answer_earlier", "Answer the earlier question first.") : tr.msg("ui.select", "Select…")}</option>
             {options.map((c) => (
               <option key={c.value} value={c.value}>
-                {c.label}
+                {tr.choice(c)}
               </option>
             ))}
           </select>
@@ -415,7 +457,7 @@ export function FillSurveyPage() {
             {choicesFor(q, instance).map((c) => (
               <label key={c.value} className={`choice-item ${picked.includes(c.value) ? "selected" : ""}`}>
                 <input type="checkbox" checked={picked.includes(c.value)} onChange={() => toggleMulti(q, instance, c.value)} />
-                {c.label}
+                {tr.choice(c)}
               </label>
             ))}
           </div>
@@ -463,10 +505,10 @@ export function FillSurveyPage() {
           {number !== undefined && <span className="q-num">{number}</span>}
           <div>
             <p className="q-label">
-              {q.label}
+              {tr.label(q)}
               {q.is_required && <span className="q-required">*</span>}
             </p>
-            {q.hint && <p className="q-hint">{q.hint}</p>}
+            {q.hint && <p className="q-hint">{tr.hint(q)}</p>}
           </div>
         </div>
         <div className="q-body">
@@ -511,15 +553,29 @@ export function FillSurveyPage() {
   }
 
   return (
-    <div className="fill-page">
+    <div className="fill-page" dir={loc?.rtl ? "rtl" : "ltr"} lang={lang || undefined}>
       <div className="fill-hero">
-        <h1>{survey.title}</h1>
-        {survey.description && <p>{survey.description}</p>}
+        {offered.length > 0 && (
+          <label className="fill-language">
+            <span>{tr.msg("ui.language", "Language")}</span>
+            <select value={lang} onChange={(e) => chooseLanguage(e.target.value)}>
+              <option value="">Original</option>
+              {offered.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.native_name}
+                  {l.percent_complete < 100 ? ` (${l.percent_complete}%)` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <h1>{tr.survey("title", survey.title)}</h1>
+        {survey.description && <p className="fill-description">{tr.survey("description", survey.description)}</p>}
         <div className="fill-progress">
           <div style={{ width: `${progress}%` }} />
         </div>
         <div className="fill-progress-text">
-          {answeredCount} of {slots.length} answered
+          {tr.msg("ui.progress", "{answered} of {total} answered", { answered: answeredCount, total: slots.length })}
         </div>
       </div>
 
@@ -530,8 +586,8 @@ export function FillSurveyPage() {
           if (b.kind === "section") {
             return (
               <div className="fill-section" key={`s-${b.section.id}`}>
-                <h2>{b.section.title}</h2>
-                {b.section.description && <p>{b.section.description}</p>}
+                <h2>{tr.section(b.section, "title")}</h2>
+                {b.section.description && <p>{tr.section(b.section, "description")}</p>}
               </div>
             );
           }
@@ -544,12 +600,12 @@ export function FillSurveyPage() {
           return (
             <div key={`g-${gid}`}>
               <div className="fill-section">
-                <h2>{group.title}</h2>
-                {group.description && <p>{group.description}</p>}
+                <h2>{tr.group(group, "title")}</h2>
+                {group.description && <p>{tr.group(group, "description")}</p>}
               </div>
               {list.map((idx, position) => (
                 <div className="group-card" key={`g-${gid}-${idx}`}>
-                  {group.repeatable && <div className="group-title">{group.title} #{position + 1}</div>}
+                  {group.repeatable && <div className="group-title">{tr.group(group, "title")} #{position + 1}</div>}
                   {groupQuestions.map((q) => renderQuestion(q, idx))}
                   {group.repeatable && list.length > Math.max(group.min_repeats || 0, 1) && (
                     <div className="group-actions">
@@ -563,7 +619,7 @@ export function FillSurveyPage() {
               {group.repeatable && (group.max_repeats == null || list.length < group.max_repeats) && (
                 <div className="group-actions">
                   <button type="button" className="btn btn-secondary" onClick={() => addInstance(group)}>
-                    + Add another {group.title}
+                    + Add another {tr.group(group, "title")}
                   </button>
                 </div>
               )}
@@ -572,9 +628,9 @@ export function FillSurveyPage() {
         })}
 
         <div className="fill-submitbar">
-          <span>{answeredCount} of {slots.length} answered</span>
+          <span>{tr.msg("ui.progress", "{answered} of {total} answered", { answered: answeredCount, total: slots.length })}</span>
           <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting…" : "Submit response"}
+            {isSubmitting ? tr.msg("ui.submitting", "Submitting…") : tr.msg("ui.submit", "Submit response")}
           </button>
         </div>
       </form>

@@ -25,6 +25,7 @@ backend/
 │   ├── security.py        # Password hashing, JWT issue/verify
 │   ├── dependencies.py    # Auth guard + role-based access control
 │   ├── seed.py            # Demo users + 3 demo surveys
+│   ├── ai/                # AI layer: config, errors, providers/, service, validation, usage
 │   ├── models/            # SQLAlchemy models (one file per entity)
 │   ├── schemas/           # Pydantic request/response schemas
 │   ├── routers/           # auth, users, surveys, submissions, sync
@@ -88,6 +89,13 @@ before any non-local deployment — generate one with:
 python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
+### AI integration (Google Gemini)
+
+AI is off by default. Variables: `AI_ENABLED`, `AI_PROVIDER`, `GEMINI_API_KEY`,
+`GEMINI_MODEL`, `AI_REQUEST_TIMEOUT`, `AI_MAX_RETRIES`, plus limits
+`AI_RATE_LIMIT_PER_MINUTE`, `AI_MAX_REQUEST_BYTES`, `AI_MAX_PROMPT_CHARS`.
+The key never leaves the server. Full guide: [`../docs/ai-setup.md`](../docs/ai-setup.md).
+
 ## Demo credentials
 
 After running the seed script (`python -m app.seed`, or automatically via
@@ -114,6 +122,14 @@ request/response schemas) is auto-generated at `/docs` (Swagger) and
 - `POST /api/sync/upload` — batch upload of an Android device's offline queue
 - `GET /api/sync/download` — full definitions of all published surveys, for
   offline caching on-device
+
+**AI (Phase 1 infrastructure)**
+
+- `GET /api/ai/status` — Administrator/Supervisor. Enabled flag, provider,
+  model and last known connection result. Never calls the provider; never
+  returns secrets.
+- `POST /api/ai/test-connection` — Administrator only. One tiny Gemini call to
+  verify key, model and network. Per-user rate limited.
 
 **Devices / presence**
 

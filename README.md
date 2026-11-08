@@ -14,6 +14,12 @@ KBS Toolbox has three parts, each a complete, independent project:
 
 Each has its own README with full setup instructions. This file covers how
 the pieces fit together and how to get everything running end-to-end.
+## Phase 3 — AI questionnaire editor
+
+Edit questionnaires in plain language with a reviewed, reversible preview, plus version history. See [PHASE3_AI_EDITOR.md](PHASE3_AI_EDITOR.md).
+
+**AI Questionnaire Reviewer (Phase 4).** "Review with AI" gives a 0–100 quality score and a report of critical issues, warnings, suggestions and good practices, with one-click, previewed, undoable fixes. Read-only. See [PHASE4_AI_REVIEWER.md](PHASE4_AI_REVIEWER.md).
+
 ## What's new in this update
 
 **Live "Online enumerators" for Admin/Supervisor**
@@ -196,6 +202,10 @@ KBS-Toolbox/
 - [`android/README.md`](android/README.md) — app architecture, offline-sync
   design in detail, build instructions, and an explicit "verification
   status" section.
+- [`docs/ai-setup.md`](docs/ai-setup.md) — Gemini AI integration (Phase 1):
+  getting a key, environment variables, enabling AI, testing, troubleshooting.
+- [`docs/ai-questionnaire.md`](docs/ai-questionnaire.md) — AI questionnaire generator (Phase 2):
+  how it works, API, validation rules, errors, deployment, tests.
 - [`docs/known-limitations.md`](docs/known-limitations.md) — a single
   consolidated list of every documented limitation/next-step across all
   three components, so nothing is buried in a sub-README.

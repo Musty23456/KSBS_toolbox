@@ -13,4 +13,6 @@ from app.models.media import SubmissionMedia, MediaKind  # noqa: F401
 from app.models.review import ReviewStatus, SubmissionReview  # noqa: F401
 from app.models.device import Device  # noqa: F401
 from app.models.translation import Translation
+from app.models.questionnaire_translation import QuestionnaireTranslation  # noqa: F401
 from app.models.password_reset import PasswordResetRequest  # noqa: F401
+from app.models.ai_usage import AIUsageLog  # noqa: F401

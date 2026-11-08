@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -11,10 +11,13 @@ from app.schemas.survey import (
     ShareTargetOut,
     SurveyCreate,
     SurveyDetailOut,
+    SurveyPublishRequest,
     SurveySharesOut,
     SurveySharesUpdate,
     SurveySummaryOut,
     SurveyUpdate,
+    SurveyVersionDetailOut,
+    SurveyVersionSummaryOut,
     SectionOut,
 )
 from app.services.audit import log_action
@@ -53,6 +56,7 @@ def _to_detail(survey: Survey) -> SurveyDetailOut:
         assigned_enumerator_ids=[u.id for u in survey.assigned_enumerators],
         scope=survey.scope,
         created_by_id=survey.created_by_id,
+        ai_generated=bool(survey.ai_generated),
     )
 
 
@@ -69,6 +73,7 @@ def _to_summary(survey: Survey) -> SurveySummaryOut:
         assigned_enumerator_ids=[u.id for u in survey.assigned_enumerators],
         scope=survey.scope,
         created_by_id=survey.created_by_id,
+        ai_generated=bool(survey.ai_generated),
     )
 
 
@@ -109,6 +114,8 @@ def _write_version_sections(db: Session, version: SurveyVersion, sections_in):
         section = SurveySection(survey_version_id=version.id, title=s_in.title, description=s_in.description, order_index=s_in.order_index)
         db.add(section); db.flush(); mapping[s_in.order_index] = section.id
         mapping[f"local-{s_in.order_index - 1}"] = section.id
+        if s_in.id:  # a re-saved section: questions still carry its old id, point them at the new row
+            mapping[s_in.id] = section.id
     return mapping
 
 
@@ -128,6 +135,8 @@ def _write_version_groups(db: Session, version: SurveyVersion, groups_in, sectio
         db.add(group); db.flush()
         mapping[g_in.order_index] = group.id
         mapping[f"local-{g_in.order_index - 1}"] = group.id
+        if g_in.id:
+            mapping[g_in.id] = group.id
     return mapping
 
 def _write_version_questions(db: Session, version: SurveyVersion, questions_in, section_map=None, group_map=None) -> None:
@@ -227,6 +236,7 @@ def create_survey(
         description=payload.description,
         created_by_id=current_user.id,
         scope=scope,
+        ai_generated=payload.ai_generated,
     )
     db.add(survey)
     db.flush()
@@ -268,18 +278,30 @@ def update_survey(
         survey.title = payload.title
     if payload.description is not None:
         survey.description = payload.description
+    if payload.ai_generated:
+        survey.ai_generated = True  # provenance only ever turns on
 
     if payload.assigned_enumerator_ids is not None and survey.scope == SurveyScope.GLOBAL.value:
         _apply_assignments(db, survey, payload.assigned_enumerator_ids)
 
+    new_version = None
     if payload.questions is not None:
         current = _current_version(survey)
+        # Never let a save silently empty a questionnaire. (Archiving is the way to retire a survey.)
+        if not payload.questions and current is not None and current.questions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Refusing to save a version with no questions. To retire a survey, archive it instead.",
+            )
         for v in survey.versions:
             v.is_current = False
         new_version = SurveyVersion(
             survey_id=survey.id,
             version_number=(current.version_number + 1) if current else 1,
             is_current=True,
+            change_summary=(payload.change_summary or "").strip() or None,
+            change_source=payload.change_source or "MANUAL",
+            created_by_id=current_user.id,
         )
         db.add(new_version)
         db.flush()
@@ -289,13 +311,81 @@ def update_survey(
 
     db.commit()
     survey = _load_survey_or_404(db, survey.id)
-    log_action(db, current_user.id, "SURVEY_UPDATED", "Survey", survey.id)
+    if new_version is not None:
+        log_action(
+            db, current_user.id, "SURVEY_UPDATED", "Survey", survey.id,
+            version=new_version.version_number, source=new_version.change_source,
+        )
+    else:
+        log_action(db, current_user.id, "SURVEY_UPDATED", "Survey", survey.id)
     return _to_detail(survey)
+
+
+def _version_summary(version: SurveyVersion, names: dict[str, str]) -> dict:
+    return dict(
+        id=version.id,
+        version_number=version.version_number,
+        is_current=bool(version.is_current),
+        created_at=version.created_at,
+        created_by_id=version.created_by_id,
+        created_by_name=names.get(version.created_by_id) if version.created_by_id else None,
+        change_source=version.change_source,
+        change_summary=version.change_summary,
+        question_count=len(version.questions),
+        section_count=len(version.sections),
+    )
+
+
+def _author_names(db: Session, survey: Survey) -> dict[str, str]:
+    ids = {v.created_by_id for v in survey.versions if v.created_by_id}
+    if not ids:
+        return {}
+    return {u.id: u.full_name for u in db.query(User).filter(User.id.in_(ids)).all()}
+
+
+@router.get("/{survey_id}/versions", response_model=list[SurveyVersionSummaryOut])
+def list_survey_versions(
+    survey_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Version history, newest first. Only people who may edit the survey can see it."""
+    survey = _load_survey_or_404(db, survey_id)
+    if not can_view(current_user, survey):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey not found")
+    _forbid_unless(can_edit(current_user, survey))
+    names = _author_names(db, survey)
+    ordered = sorted(survey.versions, key=lambda v: v.version_number, reverse=True)
+    return [SurveyVersionSummaryOut(**_version_summary(v, names)) for v in ordered]
+
+
+@router.get("/{survey_id}/versions/{version_id}", response_model=SurveyVersionDetailOut)
+def get_survey_version(
+    survey_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The full content of one past version. Read-only: loading it into the builder never changes it."""
+    survey = _load_survey_or_404(db, survey_id)
+    if not can_view(current_user, survey):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey not found")
+    _forbid_unless(can_edit(current_user, survey))
+    version = next((v for v in survey.versions if v.id == version_id), None)
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    return SurveyVersionDetailOut(
+        **_version_summary(version, _author_names(db, survey)),
+        sections=version.sections,
+        groups=version.groups,
+        questions=version.questions,
+    )
 
 
 @router.post("/{survey_id}/publish", response_model=SurveyDetailOut)
 def publish_survey(
     survey_id: str,
+    payload: SurveyPublishRequest | None = Body(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -303,6 +393,12 @@ def publish_survey(
     _forbid_unless(can_view(current_user, survey) and can_edit(current_user, survey))
     if not survey.versions:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add at least one question before publishing")
+    # AI-generated content is never published without a person saying they reviewed it.
+    if survey.ai_generated and not (payload and payload.confirm_ai_review):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This survey contains AI-generated content. Confirm that you have reviewed it before publishing.",
+        )
     survey.status = SurveyStatus.PUBLISHED
     db.commit()
     log_action(db, current_user.id, "SURVEY_PUBLISHED", "Survey", survey.id)

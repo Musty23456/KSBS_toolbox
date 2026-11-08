@@ -60,11 +60,9 @@ export function Layout() {
           <NavLink to="/exports" className={({ isActive }) => (isActive ? "active" : "")}>
             Export Center
           </NavLink>
-          {canManageSurveys && (
-            <NavLink to="/translations" className={({ isActive }) => (isActive ? "active" : "")}>
-              Languages
-            </NavLink>
-          )}
+          <NavLink to="/translations" className={({ isActive }) => (isActive ? "active" : "")}>
+            Languages
+          </NavLink>
           <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}>
             Analytics
           </NavLink>

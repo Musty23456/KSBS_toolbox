@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, Enum, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, Table, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -55,6 +55,9 @@ class Survey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     scope: Mapped[str] = mapped_column(
         String(20), nullable=False, default=SurveyScope.GLOBAL.value, server_default=SurveyScope.GLOBAL.value
     )
+    # Provenance only: true once any content came from the AI questionnaire
+    # generator. Publishing such a survey needs an explicit review confirmation.
+    ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
 
     versions = relationship(
         "SurveyVersion", back_populates="survey", order_by="SurveyVersion.version_number", cascade="all, delete-orphan"
@@ -89,6 +92,12 @@ class SurveyVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     survey_id: Mapped[str] = mapped_column(String(36), ForeignKey("surveys.id"), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_current: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    # Version history (Phase 3). All optional: versions made before this existed have none of it.
+    # change_source: MANUAL (edited by hand) or AI_EDIT (the save included changes from the AI assistant).
+    change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    change_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    created_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
 
     survey = relationship("Survey", back_populates="versions")
     sections = relationship("SurveySection", back_populates="survey_version", order_by="SurveySection.order_index", cascade="all, delete-orphan")

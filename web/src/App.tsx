@@ -85,13 +85,7 @@ export default function App() {
 
             <Route
               path="/translations"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}
-                >
-                  <TranslationsPage />
-                </ProtectedRoute>
-              }
+              element={<TranslationsPage />}
             />
 
             <Route

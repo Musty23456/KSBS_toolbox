@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "tsx --test src/pages/surveys/aiDraft.test.ts src/pages/surveys/aiEdit.test.ts src/pages/surveys/reviewReport.test.ts src/pages/translations/translationUtils.test.ts"
   },
   "dependencies": {
     "axios": "^1.7.7",
@@ -25,6 +26,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.11",
+    "tsx": "^4.19.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.5"
   }

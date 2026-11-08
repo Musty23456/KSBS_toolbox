@@ -1,7 +1,53 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { surveysApi, usersApi } from "../../api/services";
-import type { Question, QuestionGroup, ShareTarget, SurveyDetail, SurveySection, UserAccount } from "../../api/types";
+import { aiQuestionnaireApi, surveysApi, usersApi } from "../../api/services";
+import type {
+  EditPreview,
+  GeneratedQuestionnairePreview,
+  Question,
+  QuestionGroup,
+  QuestionnaireAvailability,
+  QuestionnaireBrief,
+  ShareTarget,
+  SkipLogicSuggestion,
+  SurveyDetail,
+  SurveySection,
+  SurveyVersionDetail,
+  UserAccount,
+} from "../../api/types";
+import { AIEditorPanel } from "../../components/ai/AIEditorPanel";
+import { GenerateWithAIModal } from "../../components/ai/GenerateWithAIModal";
+import { VersionHistoryModal } from "../../components/ai/VersionHistoryModal";
+import { ReviewModal, type ReviewState } from "../../components/ai/ReviewModal";
+import { RegenerateModal } from "../../components/ai/RegenerateModal";
+import { ReviewConfirmModal } from "../../components/ai/ReviewConfirmModal";
+import {
+  clearBrokenSkipLogic,
+  fallbackBrief,
+  hasContent,
+  itemKey,
+  mergeRegeneratedSection,
+  moveSection,
+  otherCodes,
+  precedingContext,
+  previewToDraft,
+  questionSectionKey,
+  removeGroup as removeGroupFrom,
+  removeSection,
+  toContext,
+} from "./aiDraft";
+import {
+  canRedoChange,
+  canUndoChange,
+  emptyHistory,
+  recordChange,
+  redoChange,
+  structureKey,
+  undoChange,
+  versionNote,
+  type AIHistory,
+  type VersionNote,
+} from "./aiEdit";
 import { QuestionEditor } from "../../components/QuestionEditor";
 import { extractErrorMessage } from "../../api/client";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -49,6 +95,36 @@ export function SurveyBuilderPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ---- AI questionnaire generator (Phase 2) ----
+  const [aiAvailability, setAiAvailability] = useState<QuestionnaireAvailability | null>(null);
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiBrief, setAiBrief] = useState<QuestionnaireBrief | null>(null);
+  // True once AI content has been loaded in this session (the saved flag comes from the server).
+  const [aiTouched, setAiTouched] = useState(false);
+  const [aiNotes, setAiNotes] = useState<{ warnings: string[]; skipLogic: SkipLogicSuggestion[] } | null>(null);
+  const [regenTarget, setRegenTarget] = useState<{ kind: "question" | "section"; index: number } | null>(null);
+  const [regenBusy, setRegenBusy] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+  const [confirmMode, setConfirmMode] = useState<"save" | "publish" | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  // The person has confirmed they reviewed the AI content; reset whenever new AI content arrives.
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
+  // Async handlers read the latest editor state through this ref instead of a stale closure.
+  const latest = useRef({ sections, groups, questions, title, description });
+  latest.current = { sections, groups, questions, title, description };
+
+  // ---- AI questionnaire editor (Phase 3) ----
+  // Undo/redo of whole AI changes (sections + groups + questions). It only works while the draft still
+  // equals what the change produced, so it can never discard edits made afterwards.
+  const [aiHistory, setAiHistory] = useState<AIHistory>(emptyHistory);
+  // What the next saved version should say about itself (AI edits applied, versions loaded).
+  const [pendingNotes, setPendingNotes] = useState<VersionNote[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewState, setReviewState] = useState<ReviewState>({ objectives: "", report: null, reviewedKey: null });
+  const [ignoredFindings, setIgnoredFindings] = useState<ReadonlySet<string>>(new Set());
+  const currentKey = useMemo(() => structureKey({ sections, groups, questions }), [sections, groups, questions]);
+
   const scope: "GLOBAL" | "PERSONAL" = isNew ? newScope : survey?.scope ?? "GLOBAL";
   const isOwner = isNew || survey?.created_by_id === user?.id;
   // Mirrors backend can_edit(): owner edits personal surveys; staff edit global ones.
@@ -63,6 +139,14 @@ export function SurveyBuilderPage() {
       .then((all) => setEnumerators(all.filter((u) => u.role === "ENUMERATOR" && u.is_active)))
       .catch(() => setEnumerators([]));
   }, [canAssign]);
+
+  const aiGenerated = aiTouched || survey?.ai_generated === true;
+  const aiReady = aiAvailability === null || aiAvailability.available;
+
+  useEffect(() => {
+    if (!canEdit) return;
+    aiQuestionnaireApi.availability().then(setAiAvailability).catch(() => setAiAvailability(null));
+  }, [canEdit]);
 
   // Sharing: only the owner of a saved personal survey.
   const canShare = !isNew && scope === "PERSONAL" && survey?.created_by_id === user?.id;
@@ -197,9 +281,9 @@ export function SurveyBuilderPage() {
   }
 
   function removeGroup(index: number) {
-    const id = groups[index]?.id ?? `local-${index}`;
-    setGroups((prev) => prev.filter((_, i) => i !== index));
-    commitQuestions((prev) => prev.map(q => q.group_id === id ? { ...q, group_id: null } : q));
+    const next = removeGroupFrom({ sections, groups, questions }, index);
+    setGroups(next.groups);
+    commitQuestions(() => next.questions);
   }
 
   function addSection() {
@@ -234,6 +318,165 @@ export function SurveyBuilderPage() {
     setPreviewValues((prev) => ({ ...prev, [code]: value }));
   }
 
+  function handleMoveSection(index: number, direction: -1 | 1) {
+    const next = moveSection({ sections, groups, questions }, index, index + direction);
+    if (next.sections === sections) return;
+    setSections(next.sections);
+    setGroups(next.groups);
+    commitQuestions(() => next.questions);
+  }
+
+  function handleRemoveSection(index: number) {
+    if (sections.length <= 1) return;
+    const target = sections[index === 0 ? 1 : 0];
+    const count = questions.filter((q) => questionSectionKey(q, sections) === itemKey(sections[index], index)).length;
+    const message = count
+      ? `Remove this section? Its ${count} question${count === 1 ? "" : "s"} will move to "${target.title || "the first section"}".`
+      : "Remove this empty section?";
+    if (!window.confirm(message)) return;
+    const next = removeSection({ sections, groups, questions }, index);
+    setSections(next.sections);
+    setGroups(next.groups);
+    commitQuestions(() => next.questions);
+  }
+
+  function applyStructure(next: { sections: SurveySection[]; groups: QuestionGroup[]; questions: Question[] }) {
+    setSections(next.sections);
+    setGroups(next.groups);
+    commitQuestions(() => next.questions);
+  }
+
+  function handleApplyAIEdit(preview: EditPreview, instruction: string) {
+    // The server already validated this exact result against the draft the proposal was made for.
+    const before = { sections: latest.current.sections, groups: latest.current.groups, questions: latest.current.questions };
+    const after = preview.result;
+    applyStructure(after);
+    setAiHistory((h) => recordChange(h, instruction, before, after));
+    setPendingNotes((n) => [...n, { text: instruction.slice(0, 120), ai: true }]);
+    setAiTouched(true);
+    setReviewAcknowledged(false);
+    setAiNotes({ warnings: preview.warnings, skipLogic: [] });
+    setError(null);
+  }
+
+  function handleAIUndo() {
+    const current = { sections: latest.current.sections, groups: latest.current.groups, questions: latest.current.questions };
+    const step = undoChange(aiHistory, current);
+    if (!step) return;
+    applyStructure(step.structure);
+    setAiHistory(step.history);
+  }
+
+  function handleAIRedo() {
+    const current = { sections: latest.current.sections, groups: latest.current.groups, questions: latest.current.questions };
+    const step = redoChange(aiHistory, current);
+    if (!step) return;
+    applyStructure(step.structure);
+    setAiHistory(step.history);
+  }
+
+  function handleLoadVersion(version: SurveyVersionDetail) {
+    const message = `Load version ${version.version_number} into the editor? It replaces the sections, groups and questions you see now. Nothing is saved until you press Save changes, and Undo AI change brings your current draft back.`;
+    if (!window.confirm(message)) return;
+    const before = { sections: latest.current.sections, groups: latest.current.groups, questions: latest.current.questions };
+    // Reuse the saved rows' ids: section_id / group_id on the questions point at them.
+    const after = {
+      sections: version.sections.length ? version.sections : [{ title: "Section 1", description: "", order_index: 1 }],
+      groups: version.groups,
+      questions: version.questions.length ? version.questions : [blankQuestion(1)],
+    };
+    applyStructure(after);
+    setAiHistory((h) => recordChange(h, `Loaded version ${version.version_number}`, before, after));
+    setPendingNotes((n) => [...n, { text: `Restored from version ${version.version_number}`, ai: false }]);
+    setIsHistoryOpen(false);
+  }
+
+  function handleUsePreview(preview: GeneratedQuestionnairePreview, brief: QuestionnaireBrief) {
+    if (hasContent(title, questions) && !window.confirm("Replace the current title, sections and questions with the AI-generated questionnaire? You can undo the question changes with Undo.")) {
+      return;
+    }
+    const draft = previewToDraft(preview);
+    setTitle(draft.title);
+    setDescription(draft.description);
+    setSections(draft.sections);
+    setGroups(draft.groups);
+    commitQuestions(() => draft.questions);
+    setAiBrief(brief);
+    setAiTouched(true);
+    setReviewAcknowledged(false);
+    setAiNotes({ warnings: preview.warnings, skipLogic: preview.skip_logic });
+    setIsAIModalOpen(false);
+    setError(null);
+  }
+
+  function closeRegenerate() {
+    if (regenBusy) return;
+    setRegenTarget(null);
+    setRegenError(null);
+  }
+
+  async function handleRegenerate(instruction: string) {
+    if (!regenTarget) return;
+    const { sections: secs, groups: grps, questions: qs, title: t, description: d } = latest.current;
+    const brief = aiBrief ?? fallbackBrief(t, d);
+    setRegenBusy(true);
+    setRegenError(null);
+    try {
+      if (regenTarget.kind === "question") {
+        const index = regenTarget.index;
+        const original = qs[index];
+        const section = secs.find((s, si) => itemKey(s, si) === questionSectionKey(original, secs));
+        const result = await aiQuestionnaireApi.regenerateQuestion({
+          brief,
+          section_title: section?.title ?? null,
+          question: original,
+          instruction: instruction || null,
+          preceding_questions: precedingContext(qs, index),
+          other_codes: otherCodes(qs, (_q, i) => i === index),
+        });
+        commitQuestions((prev) =>
+          prev.map((q, i) => (i === index ? { ...result.question, id: original.id } : q))
+        );
+        setAiNotes({ warnings: result.warnings, skipLogic: result.skip_logic });
+      } else {
+        const si = regenTarget.index;
+        const section = secs[si];
+        const key = itemKey(section, si);
+        const inSection = (q: Question) => questionSectionKey(q, secs) === key;
+        const firstIdx = qs.findIndex(inSection);
+        const before = firstIdx < 0 ? qs.filter((q) => !inSection(q)) : qs.slice(0, firstIdx).filter((q) => !inSection(q));
+        const current = qs.filter(inSection);
+        const result = await aiQuestionnaireApi.regenerateSection({
+          brief,
+          section_title: section.title || `Section ${si + 1}`,
+          section_description: section.description || null,
+          current_questions: current.map(toContext),
+          preceding_questions: before.filter((q) => q.code.trim()).slice(-300).map(toContext),
+          other_codes: otherCodes(qs, (q) => inSection(q)),
+          question_count: current.length >= 1 ? Math.min(100, current.length) : null,
+          instruction: instruction || null,
+        });
+        const merged = mergeRegeneratedSection({ sections: secs, groups: grps, questions: qs }, si, result);
+        // Questions elsewhere may have pointed at questions that no longer exist; never leave them hidden for good.
+        const checked = clearBrokenSkipLogic(merged.questions);
+        setGroups(merged.groups);
+        commitQuestions(() => checked.questions);
+        const warnings = [...result.warnings];
+        if (checked.cleared.length) {
+          warnings.push(`Skip logic was cleared on ${checked.cleared.join(", ")} because it depended on questions that were replaced.`);
+        }
+        setAiNotes({ warnings, skipLogic: result.skip_logic });
+      }
+      setAiTouched(true);
+      setReviewAcknowledged(false);
+      setRegenTarget(null);
+    } catch (err) {
+      setRegenError(extractErrorMessage(err));
+    } finally {
+      setRegenBusy(false);
+    }
+  }
+
   function validateBeforeSave(): string | null {
     if (!title.trim()) return "Give the survey a title.";
     if (questions.length === 0) return "Add at least one question.";
@@ -248,18 +491,28 @@ export function SurveyBuilderPage() {
     return null;
   }
 
-  async function handleSave() {
+  function handleSave() {
     const validationError = validateBeforeSave();
     if (validationError) {
       setError(validationError);
       return;
     }
+    // AI-generated content is only saved after the person confirms they reviewed it.
+    if (aiGenerated && !reviewAcknowledged) {
+      setConfirmMode("save");
+      return;
+    }
+    void performSave();
+  }
+
+  async function performSave() {
     setError(null);
     setIsSaving(true);
 
     const orderedSections = sections.map((section, i) => ({ ...section, order_index: i + 1 }));
     const orderedGroups = groups.map((g, i) => ({ ...g, order_index: i + 1, section_id: g.section_id || orderedSections[0]?.id }));
     const orderedQuestions = questions.map((q, i) => ({ ...q, order_index: i + 1, section_id: q.section_id || orderedSections[0]?.id }));
+    const note = versionNote(pendingNotes);
 
     try {
       if (isNew) {
@@ -271,6 +524,7 @@ export function SurveyBuilderPage() {
           groups: orderedGroups,
           scope: newScope,
           assigned_enumerator_ids: canAssign ? assignedIds : [],
+          ...(aiGenerated ? { ai_generated: true } : {}),
         });
         navigate(`/surveys/${created.id}`);
       } else {
@@ -281,10 +535,17 @@ export function SurveyBuilderPage() {
           sections: orderedSections,
           groups: orderedGroups,
           ...(canAssign ? { assigned_enumerator_ids: assignedIds } : {}),
+          ...(aiGenerated ? { ai_generated: true } : {}),
+          ...(note ? { change_source: note.source, change_summary: note.summary } : {}),
         });
         setSurvey(updated);
         setQuestions(updated.questions);
+        // A new version has new section / group rows; the questions now point at them.
+        if (updated.sections?.length) setSections(updated.sections);
+        setGroups(updated.groups ?? []);
         setAssignedIds(updated.assigned_enumerator_ids ?? []);
+        setAiHistory(emptyHistory);
+        setPendingNotes([]);
       }
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -293,14 +554,37 @@ export function SurveyBuilderPage() {
     }
   }
 
-  async function handlePublish() {
+  function handlePublish() {
+    if (!survey) return;
+    if (aiGenerated) {
+      setConfirmMode("publish"); // never published without an explicit review confirmation
+      return;
+    }
+    void performPublish(false);
+  }
+
+  async function performPublish(confirmReview: boolean) {
     if (!survey) return;
     setError(null);
     try {
-      const updated = await surveysApi.publish(survey.id);
+      const updated = await surveysApi.publish(survey.id, confirmReview);
       setSurvey(updated);
     } catch (err) {
       setError(extractErrorMessage(err));
+    }
+  }
+
+  async function handleConfirmReview() {
+    const mode = confirmMode;
+    if (!mode) return;
+    setConfirmBusy(true);
+    try {
+      setReviewAcknowledged(true);
+      if (mode === "save") await performSave();
+      else await performPublish(true);
+    } finally {
+      setConfirmBusy(false);
+      setConfirmMode(null);
     }
   }
 
@@ -426,6 +710,68 @@ export function SurveyBuilderPage() {
 
       {error && <div className="form-error">{error}</div>}
 
+      <div className="ai-toolbar">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setIsAIModalOpen(true)}
+          disabled={!aiReady}
+          title={aiReady ? "Draft a complete questionnaire with AI" : aiAvailability?.message}
+        >
+          ✨ Generate with AI
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setIsReviewOpen(true)}
+          title="Check this questionnaire for quality problems. Nothing is changed unless you apply a suggestion."
+        >
+          🔍 Review with AI
+        </button>
+        {!aiReady && <small>{aiAvailability?.message}</small>}
+      </div>
+
+      {aiGenerated && (
+        <div className="ai-banner" role="status">
+          <strong>AI-assisted questionnaire</strong>
+          <div>
+            Check every question, answer choice and skip-logic rule before you rely on it. It is saved as a draft and is
+            never published automatically; saving and publishing ask you to confirm.
+          </div>
+          {aiNotes && aiNotes.warnings.length > 0 && (
+            <ul>
+              {aiNotes.warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          )}
+          {aiNotes && (
+            <div className="ai-banner-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setAiNotes(null)}>
+                Dismiss notes
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <AIEditorPanel
+        aiAvailable={aiReady && aiAvailability !== null}
+        unavailableMessage={aiAvailability?.message}
+        surveyTitle={title}
+        surveyDescription={description}
+        getDraft={() => ({ sections: latest.current.sections, groups: latest.current.groups, questions: latest.current.questions })}
+        currentKey={currentKey}
+        canUndo={canUndoChange(aiHistory, { sections, groups, questions })}
+        canRedo={canRedoChange(aiHistory, { sections, groups, questions })}
+        undoLabel={aiHistory.undo[aiHistory.undo.length - 1]?.label}
+        redoLabel={aiHistory.redo[aiHistory.redo.length - 1]?.label}
+        onUndo={handleAIUndo}
+        onRedo={handleAIRedo}
+        onApply={handleApplyAIEdit}
+        onOpenHistory={isNew ? undefined : () => setIsHistoryOpen(true)}
+      />
+
       <div className="panel" style={{ marginBottom: 24 }}>
         <div className="field">
           <label>Survey title</label>
@@ -522,6 +868,14 @@ export function SurveyBuilderPage() {
           <div key={section.id ?? i} className="section-editor-row">
             <input value={section.title} onChange={(e) => updateSection(i, { title: e.target.value })} placeholder="Section title" />
             <input value={section.description ?? ""} onChange={(e) => updateSection(i, { description: e.target.value })} placeholder="Description (optional)" />
+            <div className="section-tools">
+              <button type="button" className="btn btn-icon" onClick={() => handleMoveSection(i, -1)} disabled={i === 0} title="Move section up" aria-label="Move section up">↑</button>
+              <button type="button" className="btn btn-icon" onClick={() => handleMoveSection(i, 1)} disabled={i === sections.length - 1} title="Move section down" aria-label="Move section down">↓</button>
+              {aiAvailability?.available && (
+                <button type="button" className="btn btn-secondary btn-icon" onClick={() => { setRegenError(null); setRegenTarget({ kind: "section", index: i }); }} title="Ask the AI to rewrite this section">✨ Regenerate</button>
+              )}
+              <button type="button" className="btn btn-danger btn-icon" onClick={() => handleRemoveSection(i)} disabled={sections.length <= 1} title="Remove section">Remove</button>
+            </div>
           </div>
         ))}
       </div>
@@ -585,6 +939,7 @@ export function SurveyBuilderPage() {
           onMoveUp={() => moveQuestion(i, -1)}
           onMoveDown={() => moveQuestion(i, 1)}
           onDuplicate={() => duplicateQuestion(i)}
+          onRegenerate={aiAvailability?.available ? () => { setRegenError(null); setRegenTarget({ kind: "question", index: i }); } : undefined}
           draggable
           onDragStart={() => setDragIndex(i)}
           onDragOver={(e) => e.preventDefault()}
@@ -645,6 +1000,61 @@ export function SurveyBuilderPage() {
             <div className="preview-footer"><button type="button" className="btn btn-secondary" onClick={() => setIsPreviewOpen(false)}>Close preview</button><button type="button" className="btn btn-primary" onClick={() => setPreviewValues({})}>Reset answers</button></div>
           </div>
         </div>
+      )}
+
+      {isAIModalOpen && (
+        <GenerateWithAIModal
+          maxQuestions={aiAvailability?.max_questions ?? 100}
+          initialTitle={title}
+          onClose={() => setIsAIModalOpen(false)}
+          onUse={handleUsePreview}
+        />
+      )}
+
+      {isReviewOpen && (
+        <ReviewModal
+          aiAvailable={aiReady && aiAvailability !== null}
+          unavailableMessage={aiAvailability?.message}
+          surveyTitle={title}
+          surveyDescription={description}
+          getDraft={() => ({ sections: latest.current.sections, groups: latest.current.groups, questions: latest.current.questions })}
+          currentKey={currentKey}
+          state={reviewState}
+          onState={setReviewState}
+          ignored={ignoredFindings}
+          onIgnore={(id) => setIgnoredFindings((prev) => new Set(prev).add(id))}
+          onRestore={(id) => setIgnoredFindings((prev) => { const next = new Set(prev); next.delete(id); return next; })}
+          onApply={handleApplyAIEdit}
+          onClose={() => setIsReviewOpen(false)}
+        />
+      )}
+
+      {isHistoryOpen && survey && (
+        <VersionHistoryModal surveyId={survey.id} onLoad={handleLoadVersion} onClose={() => setIsHistoryOpen(false)} />
+      )}
+
+      {regenTarget && (
+        <RegenerateModal
+          title={regenTarget.kind === "question" ? "Regenerate this question" : "Regenerate this section"}
+          impact={
+            regenTarget.kind === "question"
+              ? `Question ${regenTarget.index + 1} will be rewritten. Its field code stays the same.`
+              : `All questions and groups in "${sections[regenTarget.index]?.title || `Section ${regenTarget.index + 1}`}" will be replaced.`
+          }
+          busy={regenBusy}
+          error={regenError}
+          onConfirm={handleRegenerate}
+          onClose={closeRegenerate}
+        />
+      )}
+
+      {confirmMode && (
+        <ReviewConfirmModal
+          mode={confirmMode}
+          busy={confirmBusy}
+          onConfirm={handleConfirmReview}
+          onClose={() => !confirmBusy && setConfirmMode(null)}
+        />
       )}
     </div>
   );

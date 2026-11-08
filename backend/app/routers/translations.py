@@ -9,17 +9,12 @@ from app.models.group import QuestionGroup
 from app.models.survey import Survey, SurveyStatus
 from app.models.translation import Translation
 from app.models.user import RoleName, User
+from app.ai.translation.languages import list_languages
 
 router = APIRouter(prefix="/api/surveys", tags=["translations"])
 
-SUPPORTED_LANGUAGES = [
-    {"code": "en", "name": "English"},
-    {"code": "ha", "name": "Hausa"},
-    {"code": "yo", "name": "Yoruba"},
-    {"code": "ig", "name": "Igbo"},
-    {"code": "fr", "name": "French"},
-    {"code": "ar", "name": "Arabic"},
-]
+# Single source of truth for the supported languages (adds native_name and rtl; code and name are unchanged).
+SUPPORTED_LANGUAGES = list_languages()
 
 
 class TranslationIn(BaseModel):
