@@ -157,9 +157,15 @@ class Settings(BaseSettings):
     @field_validator("GEMINI_MODEL")
     @classmethod
     def _validate_gemini_model(cls, value: str) -> str:
-                value = value.strip().strip("\"'").strip()
+        # Be forgiving about common copy/paste slips in the host's env var:
+        # surrounding quotes/whitespace and a leading "models/" prefix.
+        value = value.strip().strip("\"'").strip()
         if value.lower().startswith("models/"):
             value = value[len("models/"):]
+        # Model ids look like "gemini-2.5-flash"; reject anything else so a
+        # stray value can never alter the request path.
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", value):
+            raise ValueError("GEMINI_MODEL must be a model id such as 'gemini-2.5-flash'")
         return value
 
     @field_validator("AI_REQUEST_TIMEOUT")
