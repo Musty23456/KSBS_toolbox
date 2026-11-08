@@ -20,12 +20,18 @@ export function SurveyListPage() {
   const canArchiveSurvey = (s: SurveySummary) => (s.scope === "PERSONAL" ? isOwner(s) || isAdmin : isAdmin);
   const canManage = true; // every signed-in user can create (personal) surveys
 
-  async function reload() {
+    async function reload() {
     setIsLoading(true);
-    const data = await surveysApi.list();
-    setSurveys(data);
-    setIsLoading(false);
-  }
+    setError(null);
+    try {
+      const data = await surveysApi.list();
+      setSurveys(data);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+    }
 
   useEffect(() => {
     reload();
