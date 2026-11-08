@@ -123,6 +123,12 @@ def _apply_manual_column_migrations():
         "ALTER TABLE submission_answers ADD COLUMN IF NOT EXISTS group_instance_index INTEGER",
         "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL'",
         "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN NOT NULL DEFAULT FALSE",
+                "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN NOT NULL DEFAULT FALSE",
+        # Version history (Alembic 0015)
+        "ALTER TABLE survey_versions ADD COLUMN IF NOT EXISTS change_summary TEXT",
+        "ALTER TABLE survey_versions ADD COLUMN IF NOT EXISTS change_source VARCHAR(20)",
+        "ALTER TABLE survey_versions ADD COLUMN IF NOT EXISTS created_by_id VARCHAR(36) REFERENCES users(id)",
+    ]
     ]
     with engine.begin() as conn:
         for statement in statements:
