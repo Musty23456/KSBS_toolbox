@@ -1,5 +1,3 @@
-const [loadError, setLoadError] = useState<string | null>(null);
-import { extractErrorMessage }
 import { useEffect, useState } from "react";
 import { WelcomeAudio } from "../components/WelcomeAudio";
 import { Link } from "react-router-dom";
@@ -7,6 +5,7 @@ import { surveysApi, submissionsApi } from "../api/services";
 import type { Submission, SurveySummary } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { StatusBadge } from "../components/StatusBadge";
+import { extractErrorMessage } from "../api/client";
 import { AIStatusCard } from "../components/AIStatusCard";
 
 export function DashboardPage() {
@@ -14,10 +13,11 @@ export function DashboardPage() {
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
   const [recentSubmissions, setRecentSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const canSeeSubmissions = user?.role === "ADMINISTRATOR" || user?.role === "SUPERVISOR";
   const isAdmin = user?.role === "ADMINISTRATOR";
 
-    useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
         const surveyList = await surveysApi.list();
@@ -27,7 +27,7 @@ export function DashboardPage() {
             const submissions = await submissionsApi.list({});
             setRecentSubmissions(submissions.slice(0, 6));
           } catch {
-            // leave empty
+            // Non-privileged fallback: leave empty
           }
         }
       } catch (err) {
@@ -53,9 +53,8 @@ export function DashboardPage() {
 
       {isLoading ? (
         <p className="loading-text">Loading…</p>
-            ) : loadError ? (
+      ) : loadError ? (
         <div className="form-error">Could not load data: {loadError}</div>
-      ) : (
       ) : (
         <>
           <div className="stat-row">
